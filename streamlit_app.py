@@ -66,7 +66,7 @@ body, .block-container {
 
 st.subheader("My AI Buddy")
 st.markdown("###### Let AI speak on Australian privacy law")
-st.caption("LLM • RAG • HuggingFace + LangChain + FAISS")
+st.caption("RAG • HuggingFace + LangChain + FAISS • Mobile Friendly")
 
 # ---------------------------------------------------------
 # Initialize Session State
@@ -89,81 +89,80 @@ with st.sidebar:
     st.caption("Streamlit Cloud • CPU-only • HF Inference API")
 
 # ---------------------------------------------------------
-# Container for chat & footer
+# Display Chat History (top)
 # ---------------------------------------------------------
-chat_container = st.container()
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        st.markdown(f"<div class='user-msg'>{msg['text']}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='ai-msg'>{msg['text']}</div>", unsafe_allow_html=True)
+        if st.session_state.show_context and msg.get("docs"):
+            with st.expander("Retrieved Context"):
+                for d in msg["docs"]:
+                    st.markdown(d["content"])
+                    st.caption(d["metadata"])
 
-with chat_container:
-    # Display Chat History
-    for msg in st.session_state.messages:
-        if msg["role"] == "user":
-            st.markdown(f"<div class='user-msg'>{msg['text']}</div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='ai-msg'>{msg['text']}</div>", unsafe_allow_html=True)
-            if st.session_state.show_context and msg.get("docs"):
-                with st.expander("Retrieved Context"):
-                    for d in msg["docs"]:
-                        st.markdown(d["content"])
-                        st.caption(d["metadata"])
+# ---------------------------------------------------------
+# Chat Input (bottom)
+# ---------------------------------------------------------
+user_input = st.chat_input("Ask something...")
 
-    # Chat Input
-    user_input = st.chat_input("Ask something...")
+if user_input:
+    # Store user message
+    st.session_state.messages.append({
+        "role": "user",
+        "text": user_input,
+        "docs": []
+    })
+    st.markdown(f"<div class='user-msg'>{user_input}</div>", unsafe_allow_html=True)
 
-    if user_input:
-        # Store user message
-        st.session_state.messages.append({
-            "role": "user",
-            "text": user_input,
-            "docs": []
-        })
+    # ---------------------------------------------------------
+    # Streaming RAG LLM Output
+    # ---------------------------------------------------------
+    with st.spinner("Thinking..."):
+        try:
+            stream = rag.generate_streaming(
+                query=user_input,
+                top_k=top_k,
+                include_docs=True
+            )
 
-        st.markdown(f"<div class='user-msg'>{user_input}</div>", unsafe_allow_html=True)
+            ai_box = st.empty()
+            final_text = ""
+            final_docs = []
 
-        # ---------------------------------------------------------
-        # Streaming RAG LLM Output
-        # ---------------------------------------------------------
-        with st.spinner("Thinking..."):
-            try:
-                stream = rag.generate_streaming(
-                    query=user_input,
-                    top_k=top_k,
-                    include_docs=True
-                )
+            for chunk in stream:
+                if "token" in chunk:
+                    final_text += chunk["token"]
+                    ai_box.markdown(
+                        f"<div class='ai-msg'>{final_text}</div>",
+                        unsafe_allow_html=True
+                    )
 
-                ai_box = st.empty()
-                final_text = ""
-                final_docs = []
+                if "docs" in chunk:
+                    final_docs = [
+                        {"content": d.page_content, "metadata": d.metadata or {}}
+                        for d in chunk["docs"]
+                    ]
 
-                for chunk in stream:
-                    if "token" in chunk:
-                        final_text += chunk["token"]
-                        ai_box.markdown(
-                            f"<div class='ai-msg'>{final_text}</div>",
-                            unsafe_allow_html=True
-                        )
+            st.session_state.messages.append({
+                "role": "assistant",
+                "text": final_text,
+                "docs": final_docs
+            })
 
-                    if "docs" in chunk:
-                        final_docs = [
-                            {"content": d.page_content, "metadata": d.metadata or {}}
-                            for d in chunk["docs"]
-                        ]
+        except Exception as e:
+            st.error(f"Error: {e}")
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "text": final_text,
-                    "docs": final_docs
-                })
-
-            except Exception as e:
-                st.error(f"Error: {e}")
-
-    # Footer below the chat input
-    st.markdown(
-        """
-        <hr>
-        <p style='text-align:center; font-size:12px; color:gray;'>
-            &copy; 2025 Abdul Bari. All rights reserved.
-        </p>
-        """,
-        unsafe_allow_html=True
-    )
+# ---------------------------------------------------------
+# Footer (always under input)
+# ---------------------------------------------------------
+st.markdown(
+    """
+    <hr>
+    <p style='text-align:center; font-size:12px; color:gray;'>
+        &copy; 2025 Abdul Bari. All rights reserved.
+    </p>
+    """,
+    unsafe_allow_html=True
+)
