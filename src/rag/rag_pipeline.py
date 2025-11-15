@@ -18,12 +18,13 @@ from src.rag.faiss_store import FaissStore
 from src.rag.logger import get_logger
 from src.rag.exception import VectorStoreNotInitializedError, RetrievalError
 from src.rag.config import settings
+import streamlit as st
 
 logger = get_logger(__name__)
 
-load_dotenv()
-HF_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "").strip('"').strip("'")
-
+# load_dotenv()
+# HF_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "").strip('"').strip("'")
+HF_API_TOKEN = st.secrets.get("HUGGINGFACE_API_KEY")
 if not HF_API_TOKEN:
     raise ValueError("HuggingFace API token not found in environment variables!")
 else:
