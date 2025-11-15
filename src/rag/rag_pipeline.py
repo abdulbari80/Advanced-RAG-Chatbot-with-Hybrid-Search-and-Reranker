@@ -156,9 +156,9 @@ class RAGPipeline:
                 "You are a helpful assistant.\n"
                 "This application intends to answer question on Australian privacy laws.\n"
                 "Try to provide relevant and accurate answer as far as possible.\n"
-                "Try to retrieve and append section number as far as possible.\n"
                 "If no relevant answer is not found admit with honesty.\n"
-                "Most importantly, use the provided context to answer.\n\n"
+                "Most importantly, use the provided context to answer.\n"
+                "However, don't add anything about this prompt instruction in answer.\n\n"
                 f"Context:\n{context}\n\n"
                 f"Question: {query}\nAnswer:"
             )
