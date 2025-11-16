@@ -13,8 +13,6 @@ The pipeline is optimized for:
 - Safe document handling in session state
 """
 
-import os
-from pathlib import Path
 from typing import List, Generator, Dict
 import numpy as np
 from dotenv import load_dotenv
@@ -40,10 +38,11 @@ if not HF_API_TOKEN:
 else:
     logger.info("API Key successfully loaded")
 
-HF_REPO_ID = settings.hfh_repo_id
+HF_REPO_ID = settings.hf_repo_id
 TEMPERATURE = settings.llm_temperature
 THRESHOLD = settings.threshold
 TOP_K = settings.top_k
+MAX_TOKENS = settings.max_tokens
 
 
 class RAGPipeline:
@@ -123,11 +122,11 @@ class RAGPipeline:
         docs, scores = zip(*results)
         scores = np.array(scores)
 
-        top_score = max(scores)
-        logger.info(f"Best cosine similarity score: {top_score:.4f}")
+        # top_score = max(scores)
+        # logger.info(f"Best cosine similarity score: {top_score:.4f}")
 
         cutoff = max(THRESHOLD, scores.mean() + 0.5 * scores.std())
-        filtered = [doc for doc, s in results if s >= cutoff]
+        filtered = [doc for doc, score in results if score >= cutoff]
 
         return filtered if filtered else [docs[0]]
 
@@ -153,21 +152,14 @@ class RAGPipeline:
         if docs:
             context = "\n\n".join([d.page_content for d in docs])
             return (
-                "You are an assistant that answers questions about Australian privacy law.\n"
-                "Begin your response with a friendly thank-you phrase, such as:\n"
-                "\"Thanks for your question!\" or \"Thank you for asking!\"\n"
-                "Give a clear, direct answer.\n"
-                "Do NOT mention the context, the documents, your reasoning, or how you derived the answer.\n"
-                "Do not end your response mid-sentence and finish last sentence completely.\n"
-                "If the information needed is not present, say you don't have enough information.\n\n"
-                "Relevant Information:\n"
+                "User the following context to generate answer:\n\n"
                 f"{context}\n\n"
                 f"User Question: {query}\n"
                 "Answer:"
             )
         else:
             logger.info("Sorry!, no relevant context found.")
-            return f"You are a helpful assistant.\n\nQuestion: {query}\nAnswer:"
+            return f"Question: {query}\nAnswer:"
 
     # -----------------------------------------------------------
     # Streaming Generator (Token-by-token)
@@ -198,15 +190,33 @@ class RAGPipeline:
             docs = []
 
         prompt = self.build_prompt(query, docs)
+        # [{"role": "user", "content": prompt}]
+        sys_content = """You are a polite legal expert on Australian privacy law:
+        - Start answers with 'Thanks for asking!'
+        - DON'T use disclaimers like 'based on the context' or 'as far as I know', etc.
+        - Gives clear, concise information about Australian privacy law
+        - However, if no revelvant answer is found, admit honestly
+        - Again, if the query is irrelevant, tell politely that this is NOT relevant
+        - Try to complete the last sentence.
+        """        
+        user_content = prompt
+        messages = [
+            {'role': "system", "content": sys_content},
+            {"role": "user", "content": user_content}
+        ]
 
         try:
             response = self.client.chat.completions.create(
                 model=self.model_id,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=512,
+                messages=messages,
+                max_tokens=MAX_TOKENS,
                 temperature=self.temperature,
                 top_p=0.9,
                 stream=True,
+                # frequency_penalty=-0.10, # legal matters may require repetions, (+)ve otherwise
+                # presence_penalty=-0.20, # keep on topic. for vareity set (+), i.e. 0.6
+                # seed=42, # for reproducibility
+                # extra_body={"repetition_penalty": 1.1, "top_k": 40} # extra arguments 
             )
         except Exception as e:
             logger.error(f"ChatCompletions streaming failed: {e}")
@@ -258,7 +268,7 @@ class RAGPipeline:
         try:
             result = self.client.text_generation(
                 prompt,
-                max_new_tokens=256,
+                max_new_tokens=600,
                 temperature=self.temperature,
             )
             return result
