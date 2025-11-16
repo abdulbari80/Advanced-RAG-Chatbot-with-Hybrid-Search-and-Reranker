@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     threshold: float = 0.60
     relative_factor : float = 0.80
     context_window_size: int = 1024
-    max_tokens = 600
+    max_tokens = 768
 
 settings = Settings()
 

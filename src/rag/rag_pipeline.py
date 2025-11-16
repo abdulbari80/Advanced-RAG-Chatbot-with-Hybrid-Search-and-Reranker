@@ -149,17 +149,40 @@ class RAGPipeline:
         str
             The generated prompt string ready for LLM inference.
         """
+        sys_content = """
+        You are a polite senior legal expert specializing in Australian privacy law.
+        Your behaviour rules:
+        - Begin every answer with: "Thanks for asking!"
+        - DO NOT start answers with phrases like "Based on the context" or "The provided context says..."
+        - DO NOT mention that you used retrieved documents.
+        - Provide clear, concise legal explanations.
+        - If the user question is irrelevant to privacy law, say so politely.
+        - If the documents do not provide enough information, say so honestly.
+        - Always complete your last sentence and do not stop mid-thought.
+        """
+
+        # ASSISTANT MESSAGE — contains RAG-retrieved factual material
         if docs:
-            context = "\n\n".join([d.page_content for d in docs])
-            return (
-                "User the following context to generate answer:\n\n"
-                f"{context}\n\n"
-                f"User Question: {query}\n"
-                "Answer:"
-            )
+            context = []
+            context = "\n\n".join([d.page_content for d in docs if docs])
+            context_message = {
+                "role": "assistant",
+                "content": f"Here is helpful reference material:\n\n{context}"
+            }
         else:
-            logger.info("Sorry!, no relevant context found.")
-            return f"Question: {query}\nAnswer:"
+            context_message = {
+                "role": "assistant",
+                "content": "No reference material was found for this question."
+            }
+
+        # USER MESSAGE — contains only the user's question (no formatting!)
+        user_message = {"role": "user", "content": query}
+
+        return [
+            {"role": "system", "content": sys_content},
+            context_message,
+            user_message,
+        ]
 
     # -----------------------------------------------------------
     # Streaming Generator (Token-by-token)
@@ -189,22 +212,8 @@ class RAGPipeline:
             logger.exception(f"Error retrieving documents: {e}")
             docs = []
 
-        prompt = self.build_prompt(query, docs)
-        # [{"role": "user", "content": prompt}]
-        sys_content = """You are a polite legal expert on Australian privacy law:
-        - Start answers with 'Thanks for asking!'
-        - DON'T use disclaimers like 'based on the context' or 'as far as I know', etc.
-        - Gives clear, concise information about Australian privacy law
-        - However, if no revelvant answer is found, admit honestly
-        - Again, if the query is irrelevant, tell politely that this is NOT relevant
-        - Try to complete the last sentence.
-        """        
-        user_content = prompt
-        messages = [
-            {'role': "system", "content": sys_content},
-            {"role": "user", "content": user_content}
-        ]
-
+        messages = self.build_prompt(query, docs)
+        
         try:
             response = self.client.chat.completions.create(
                 model=self.model_id,
@@ -268,7 +277,7 @@ class RAGPipeline:
         try:
             result = self.client.text_generation(
                 prompt,
-                max_new_tokens=600,
+                max_new_tokens=MAX_TOKENS,
                 temperature=self.temperature,
             )
             return result
