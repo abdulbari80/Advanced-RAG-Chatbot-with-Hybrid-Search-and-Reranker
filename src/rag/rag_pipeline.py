@@ -140,47 +140,40 @@ class RAGPipeline:
 
         # SYSTEM BEHAVIOUR PROMPT
         sys_content = """
-            You are a polite senior legal expert specializing in Australian privacy law.
+        You are a polite senior legal expert specializing in Australian privacy law.
 
-            When responding:
-            - Always begin with a short thank-you sentence such as: "Thanks for your question."
-            - Provide clear, concise, accurate legal explanations.
-            - If the user question is not related to privacy law, politely say so.
-            - Do not use phrases like “Here is your answer”, “Below is”, or similar meta-introductions.
-            - Start answering immediately after the thank-you sentence.
-
-            Do NOT start responses with:
-            "Based on the context", 
-            "The documents suggest", 
-            "According to the information you provided", 
-            "From the context", 
+        Required behaviour:
+        - Begin every answer with a short thank-you sentence such as: "Thanks for your question."
+        - After the thank-you, immediately provide the legal answer.
+        - Provide clear, concise, and accurate legal explanations.
+        - If the question is not about Australian privacy law, politely say so.
+        - Never use phrases like “Here is your answer”, “Below is”, or similar meta-introductions.
+        - Never start with or include phrases like:
+            "Based on the context",
+            "According to the provided documents",
+            "From the context",
             or any similar wording.
-            """
+        - Never refer to retrieved documents or reference material explicitly.
+        - Do not hallucinate statutory citations; if unsure, clearly state that.
+        """
 
-        # SYSTEM CONTEXT MESSAGE (RAG documents)
+        system_message = {"role": "system", "content": sys_content}
+
+        # USER message (hidden RAG context)
         if docs:
             merged_context = "\n\n".join([d.page_content for d in docs])
             context_message = {
-                "role": "system",
-                "content": (
-                    "Reference material for answering the user's question "
-                    "(Do NOT mention or cite this text explicitly):\n\n" + merged_context
-                )
+                "role": "user",
+                "content": "Reference material (do NOT mention or cite this text explicitly):\n\n" + merged_context
             }
         else:
-            context_message = {
-                "role": "system",
-                "content": "No reference material was available for retrieval."
-            }
+            context_message = {"role": "user", "content": "Reference material: (none retrieved)"}
 
-        # USER MESSAGE
+        # USER message (actual question)
         user_message = {"role": "user", "content": query}
 
-        return [
-            {"role": "system", "content": sys_content},
-            context_message,
-            user_message
-        ]
+        return [system_message, context_message, user_message]
+        
 
 
     # -----------------------------------------------------------
