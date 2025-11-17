@@ -129,7 +129,7 @@ if user_input:
             )
 
             ai_box = st.empty()
-            final_text = ""
+            final_text = "Thanks for asking. "
             final_docs = []
 
             for chunk in stream:

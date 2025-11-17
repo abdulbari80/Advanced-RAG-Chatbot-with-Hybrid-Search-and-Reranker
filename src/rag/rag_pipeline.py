@@ -1,304 +1,181 @@
-"""
-Retrieval-Augmented Generation (RAG) Pipeline
-
-This module defines the main RAGPipeline class used to:
-- Retrieve relevant documents using FAISS
-- Build contextual prompts
-- Stream LLM outputs token-by-token using HuggingFace Inference API
-- Provide a non-streaming fallback generation interface
-
-The pipeline is optimized for:
-- Streamlit Cloud deployment (CPU-only)
-- Stateless inference
-- Safe document handling in session state
-"""
-
-from typing import List, Generator, Dict
-import numpy as np
-from dotenv import load_dotenv
-
+from typing import List, Dict, Generator
 from huggingface_hub import InferenceClient
-from langchain_core.documents import Document
+import numpy as np
+import streamlit as st
 
 from src.rag.faiss_store import FaissStore
 from src.rag.logger import get_logger
 from src.rag.exception import VectorStoreNotInitializedError, RetrievalError
 from src.rag.config import settings
-import streamlit as st
+from langchain_core.documents import Document
 
 logger = get_logger(__name__)
 
-# dotenv_path = Path(__file__).resolve().parents[2] / ".env"
-# load_dotenv(dotenv_path)
-# HF_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN", "").strip('"').strip("'")
-
-HF_API_TOKEN = st.secrets.get("HUGGINGFACE_API_KEY")
+#HF_API_TOKEN = st.secrets.get("HUGGINGFACE_API_KEY")
+import os
+HF_API_TOKEN = os.getenv("HUGGINGFACE_API_KEY")
 if not HF_API_TOKEN:
     raise ValueError("HuggingFace API token not found in environment variables!")
-else:
-    logger.info("API Key successfully loaded")
 
 HF_REPO_ID = settings.hf_repo_id
 TEMPERATURE = settings.llm_temperature
-THRESHOLD = settings.threshold
 TOP_K = settings.top_k
 MAX_TOKENS = settings.max_tokens
+THRESHOLD = settings.threshold
 
+# -------------------------------
+# Compliance helper
+# -------------------------------
+def check_response_compliance(text: str):
+    forbidden_phrases = [
+        "based on the context",
+        "according to the documents",
+        "from the context",
+        "as far as possible",
+    ]
+    return {
+        "starts_with_thanks": text.lower().startswith("thanks"),
+        "forbidden_phrases_found": [p for p in forbidden_phrases if p in text.lower()]
+    }
 
+# -------------------------------
+# RAGPipeline
+# -------------------------------
 class RAGPipeline:
-    """
-    Main class implementing the Retrieval-Augmented Generation pipeline.
-
-    This pipeline performs:
-    - Retrieval from a FAISS vector store
-    - Prompt construction with contextual documents
-    - Token-by-token generation via HuggingFace Inference API (streaming)
-    - Non-streaming generation for batch use cases
-
-    Parameters
-    ----------
-    vector_store : FaissStore, optional
-        Preloaded FAISS vector store. If None, a new store is created.
-    temperature : float, optional
-        Sampling temperature for the LLM. Default is from settings.
-    streaming : bool, optional
-        Whether to enable streaming mode for token output.
-    """
-
     def __init__(self, vector_store=None, temperature=TEMPERATURE, streaming=True):
         self.vector_store = vector_store or FaissStore()
         self.temperature = temperature
         self.streaming = streaming
-
-        # Initialize HuggingFace Inference client
         self.client = InferenceClient(api_key=HF_API_TOKEN)
         self.model_id = HF_REPO_ID
-
         logger.info("RAGPipeline initialized with HF InferenceClient.")
 
-    # -----------------------------------------------------------
-    # Retrieve + Filter
-    # -----------------------------------------------------------
+    # ---------------------------
+    # Retrieval
+    # ---------------------------
     def retrieve(self, query: str, k: int = TOP_K) -> List[Document]:
-        """
-        Retrieve the top-k documents most relevant to the query from FAISS.
-
-        Retrieval includes an adaptive filtering mechanism based on:
-        - Maximum score
-        - Dynamic threshold using mean + standard deviation
-        - Minimum relevance cutoff
-
-        Parameters
-        ----------
-        query : str
-            User input or question.
-        k : int, optional
-            Number of top documents to consider. Uses global TOP_K by default.
-
-        Returns
-        -------
-        List[Document]
-            A list of filtered relevant documents. May return an empty list.
-        """
         if not self.vector_store.is_loaded:
+            logger.warning("Vector store empty — returning no documents.")
             return []
 
         try:
             results = self.vector_store.similarity_search(query, k=k)
-        except Exception:
+        except (VectorStoreNotInitializedError, RetrievalError) as e:
+            logger.warning(f"Retrieval error: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected retrieval error: {e}")
             return []
 
         if not results:
             return []
 
-        # Scores
         _, scores = zip(*results)
         scores = np.array(scores)
-
         cutoff = max(THRESHOLD, scores.mean() + 0.5 * scores.std())
-
         filtered = [doc for doc, score in results if score >= cutoff]
-
-        # Fallback: always include top-1 doc to avoid hallucination
-        if not filtered:
-            filtered = [results[0][0]]
-
         return filtered
 
-    # -----------------------------------------------------------
-    # Prompt Builder
-    # -----------------------------------------------------------
+    # ---------------------------
+    # Build prompt (Llama 3.2-safe)
+    # ---------------------------
     def build_prompt(self, query: str, docs: List[Document]):
-        """
-        Build a clean chat prompt for strict legal RAG behaviour.
-
-        Structure:
-        - system (policy + behavioural instructions)
-        - system (reference material)
-        - user (actual question)
-        """
-
-        # SYSTEM BEHAVIOUR PROMPT
         sys_content = """
         You are a polite senior legal expert specializing in Australian privacy law.
 
         Required behaviour:
-        - Begin every answer with a short thank-you sentence such as: "Thanks for your question."
-        - After the thank-you, immediately provide the legal answer.
-        - Provide clear, concise, and accurate legal explanations.
-        - If the question is not about Australian privacy law, politely say so.
-        - Never use phrases like “Here is your answer”, “Below is”, or similar meta-introductions.
-        - Never start with or include phrases like:
+        - Always begin your answer with a short thank-you sentence, e.g., "Thanks for your question."
+        - Immediately after the thank-you, provide clear, concise, and accurate legal guidance.
+        - Never start with disclaimers like:
             "Based on the context",
-            "According to the provided documents",
+            "According to the documents",
             "From the context",
-            or any similar wording.
-        - Never refer to retrieved documents or reference material explicitly.
-        - Do not hallucinate statutory citations; if unsure, clearly state that.
+            "As far as possible",
+            or similar wording.
+        - Never refer to any retrieved documents or reference material explicitly.
+        - If the question is unrelated to privacy law, politely state that.
         """
-
         system_message = {"role": "system", "content": sys_content}
 
-        # USER message (hidden RAG context)
+        # Facts as hidden bullets
         if docs:
-            merged_context = "\n\n".join([d.page_content for d in docs])
-            context_message = {
-                "role": "user",
-                "content": "Reference material (do NOT mention or cite this text explicitly):\n\n" + merged_context
-            }
+            bullets = "\n".join(
+                [f"- {line}" for d in docs for line in d.page_content.split("\n") if line.strip()]
+            )
+            context_message = {"role": "user", "content": f"Facts (do NOT mention these in your answer):\n{bullets}"}
         else:
-            context_message = {"role": "user", "content": "Reference material: (none retrieved)"}
+            context_message = {"role": "user", "content": "Facts (do NOT mention these in your answer): (none retrieved)"}
 
-        # USER message (actual question)
         user_message = {"role": "user", "content": query}
-
         return [system_message, context_message, user_message]
-        
 
-
-    # -----------------------------------------------------------
-    # Streaming Generator (Token-by-token)
-    # -----------------------------------------------------------
-    def generate_streaming(self, query: str, top_k: int = 3, include_docs: bool = True):
-        """
-        Generate an answer using token streaming from the HF Inference API.
-
-        Parameters
-        ----------
-        query : str
-            The user's question.
-        top_k : int, optional
-            Number of retrieval documents.
-        include_docs : bool, optional
-            Whether the generator should emit retrieved docs as the final event.
-
-        Yields
-        ------
-        dict
-            Either {"token": "..."} for each generated token OR
-            {"docs": [...]} after generation finishes.
-        """
-        try:
-            docs = self.retrieve(query, k=top_k)
-        except Exception as e:
-            logger.exception(f"Error retrieving documents: {e}")
-            docs = []
-
+    # ---------------------------
+    # Generate answer (non-streaming)
+    # ---------------------------
+    def generate(self, query: str, top_k: int = TOP_K) -> Dict:
+        docs = self.retrieve(query, k=top_k)
         messages = self.build_prompt(query, docs)
-        
+
+        try:
+            result = self.client.chat.completions.create(
+                model=self.model_id,
+                messages=messages,
+                max_tokens=MAX_TOKENS,
+                temperature=self.temperature,
+                top_p=0.9,
+                stream=False,
+            )
+            answer_text = result.choices[0].message.content
+        except Exception as e:
+            logger.exception(f"LLM generation failed: {e}")
+            answer_text = "An error occurred while generating the response."
+
+        # Compliance check
+        compliance = check_response_compliance(answer_text)
+        return {
+            "answer": answer_text,
+            "docs": docs,
+            "compliance": compliance
+        }
+
+    # ---------------------------
+    # Streaming generator
+    # ---------------------------
+    def generate_streaming(self, query: str, top_k: int = TOP_K) -> Generator[Dict, None, None]:
+        docs = self.retrieve(query, k=top_k)
+        messages = self.build_prompt(query, docs)
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model_id,
                 messages=messages,
                 max_tokens=MAX_TOKENS,
-                temperature=min(self.temperature, 0.3),   # enforce low variance for legal answers
-                top_p=0.85,
-                frequency_penalty=0.0,
-                presence_penalty=0.0,
-                stream=True,
+                temperature=self.temperature,
+                top_p=0.9,
+                stream=True
             )
-
         except Exception as e:
-            logger.error(f"ChatCompletions streaming failed: {e}")
+            logger.error(f"Streaming generation failed: {e}")
             yield {"token": "AI Error: Chat Completions API failed.\n"}
             return
 
+        # Stream token by token
         for event in response:
             try:
                 if hasattr(event, "choices") and event.choices:
                     choice = event.choices[0]
                     delta = getattr(choice, "delta", None)
-
                     if delta and getattr(delta, "content", None):
                         yield {"token": delta.content}
-
             except Exception as e:
                 logger.exception(f"Streaming token parse error: {e}")
 
-        if include_docs:
-            yield {"docs": docs}
+        # Final docs
+        yield {"docs": docs}
 
-    # -----------------------------------------------------------
-    # Non-streaming fallback (used internally / batch)
-    # -----------------------------------------------------------
-    def generate(self, query: str, top_k: int = 3) -> str:
-        """
-        Execute non-streaming text generation using the HF Inference API.
-
-        Parameters
-        ----------
-        query : str
-            User query.
-        top_k : int, optional
-            Number of retrieval documents.
-
-        Returns
-        -------
-        str
-            The generated answer or an error message.
-        """
-        try:
-            docs = self.retrieve(query, k=top_k)
-        except Exception as e:
-            logger.exception(f"Error retrieving docs: {e}")
-            docs = []
-
-        prompt = self.build_prompt(query, docs)
-
-        try:
-            result = self.client.text_generation(
-                prompt,
-                max_new_tokens=MAX_TOKENS,
-                temperature=self.temperature,
-            )
-            return result
-        except Exception as e:
-            logger.exception(f"Non-streaming LLM generation error: {e}")
-            return "An error occurred while generating the response."
-
-    # -----------------------------------------------------------
-    # Legacy user_interaction
-    # -----------------------------------------------------------
-    def user_interaction(self, user_query: str, top_k=TOP_K, return_context=True):
-        """
-        Legacy helper to retrieve context and produce a final answer
-        in a single call.
-
-        Parameters
-        ----------
-        user_query : str
-            The user question.
-        top_k : int, optional
-            Number of documents to retrieve.
-        return_context : bool, optional
-            Whether to return the retrieved docs.
-
-        Returns
-        -------
-        Tuple[str, List[Document]]
-            The answer and optionally the documents.
-        """
-        docs = self.retrieve(user_query, k=top_k)
-        answer = self.generate(user_query, top_k=top_k)
-
-        return (answer, docs) if return_context else (answer, [])
+    # ---------------------------
+    # Quick user interaction helper
+    # ---------------------------
+    def user_interaction(self, user_query: str, top_k=TOP_K):
+        result = self.generate(user_query, top_k=top_k)
+        return result
