@@ -85,7 +85,7 @@ class RAGPipeline:
 
         Retrieval includes an adaptive filtering mechanism based on:
         - Maximum score
-        - Dynamic threshold using mean + variance
+        - Dynamic threshold using mean + standard deviation
         - Minimum relevance cutoff
 
         Parameters
@@ -101,84 +101,87 @@ class RAGPipeline:
             A list of filtered relevant documents. May return an empty list.
         """
         if not self.vector_store.is_loaded:
-            logger.warning("Vector store empty — returning no documents.")
             return []
 
         try:
             results = self.vector_store.similarity_search(query, k=k)
-        except VectorStoreNotInitializedError:
-            logger.warning("FAISS store not initialized — returning empty retrieval.")
-            return []
-        except RetrievalError as e:
-            logger.error(f"RetrievalError: {e}")
-            return []
-        except Exception as e:
-            logger.exception(f"Unexpected retrieval error: {e}")
+        except Exception:
             return []
 
         if not results:
             return []
 
+        # Scores
         _, scores = zip(*results)
         scores = np.array(scores)
 
-        # top_score = max(scores)
-        # logger.info(f"Best cosine similarity score: {top_score:.4f}")
-
         cutoff = max(THRESHOLD, scores.mean() + 0.5 * scores.std())
+
         filtered = [doc for doc, score in results if score >= cutoff]
 
-        return filtered # if filtered else [docs[0]]
+        # Fallback: always include top-1 doc to avoid hallucination
+        if not filtered:
+            filtered = [results[0][0]]
+
+        return filtered
 
     # -----------------------------------------------------------
     # Prompt Builder
     # -----------------------------------------------------------
-    def build_prompt(self, query: str, docs: List[Document]) -> str:
+    def build_prompt(self, query: str, docs: List[Document]):
         """
-        Construct a prompt that includes retrieved context followed by the user query.
+        Build a clean chat prompt for strict legal RAG behaviour.
 
-        Parameters
-        ----------
-        query : str
-            The user question.
-        docs : List[Document]
-            List of documents selected by the retriever.
-
-        Returns
-        -------
-        str
-            The generated prompt string ready for LLM inference.
+        Structure:
+        - system (policy + behavioural instructions)
+        - system (reference material)
+        - user (actual question)
         """
+
+        # SYSTEM BEHAVIOUR PROMPT
         sys_content = """
-        You are a polite senior legal expert specializing in Australian privacy law.
-        Follow this rules for generating answwer:
-        - DO NOT use disclaimer like "Based on the context..." or "As far as possible..."
-        - Provide clear, concise and complete legal explanations.
-        - If the user question is NOT relevant to privacy law, say so politely.
-        """
+            You are a polite senior legal expert specializing in Australian privacy law.
 
-        # ASSISTANT MESSAGE — contains RAG-retrieved factual material
+            When responding:
+            - Always begin with a short thank-you sentence such as: "Thanks for your question."
+            - Provide clear, concise, accurate legal explanations.
+            - If the user question is not related to privacy law, politely say so.
+            - Do not use phrases like “Here is your answer”, “Below is”, or similar meta-introductions.
+            - Start answering immediately after the thank-you sentence.
+
+            Do NOT start responses with:
+            "Based on the context", 
+            "The documents suggest", 
+            "According to the information you provided", 
+            "From the context", 
+            or any similar wording.
+            """
+
+        # SYSTEM CONTEXT MESSAGE (RAG documents)
         if docs:
-            context = []
-            context = "\n\n".join([d.page_content for d in docs if docs])
+            merged_context = "\n\n".join([d.page_content for d in docs])
             context_message = {
-                "role": "assistant",
-                "content": f"Use this reference information:\n\n{context}"
+                "role": "system",
+                "content": (
+                    "Reference material for answering the user's question "
+                    "(Do NOT mention or cite this text explicitly):\n\n" + merged_context
+                )
             }
         else:
             context_message = {
-                "role": "assistant",
-                "content": "No reference information is available."
+                "role": "system",
+                "content": "No reference material was available for retrieval."
             }
 
-        # USER MESSAGE — contains only the user's question (no formatting!)
+        # USER MESSAGE
         user_message = {"role": "user", "content": query}
 
         return [
             {"role": "system", "content": sys_content},
             context_message,
-            user_message,
+            user_message
         ]
+
 
     # -----------------------------------------------------------
     # Streaming Generator (Token-by-token)
@@ -215,14 +218,13 @@ class RAGPipeline:
                 model=self.model_id,
                 messages=messages,
                 max_tokens=MAX_TOKENS,
-                temperature=self.temperature,
-                top_p=0.9,
+                temperature=min(self.temperature, 0.3),   # enforce low variance for legal answers
+                top_p=0.85,
+                frequency_penalty=0.0,
+                presence_penalty=0.0,
                 stream=True,
-                # frequency_penalty=-0.10, # legal matters may require repetions, (+)ve otherwise
-                # presence_penalty=-0.20, # keep on topic. for vareity set (+), i.e. 0.6
-                # seed=42, # for reproducibility
-                # extra_body={"repetition_penalty": 1.1, "top_k": 40} # extra arguments 
             )
+
         except Exception as e:
             logger.error(f"ChatCompletions streaming failed: {e}")
             yield {"token": "AI Error: Chat Completions API failed.\n"}
