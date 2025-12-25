@@ -1,157 +1,163 @@
 import streamlit as st
+import base64
 
+# Internal Module Imports
+from src.rag.hybrid_store import HybridStore
 from src.rag.rag_pipeline import RAGPipeline
-from src.rag.faiss_store import FaissStore
 from src.rag.config import settings
 from src.rag.logger import get_logger
-from src.rag.exception import DocumentLoadError
 
+# Setup logging
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------
-# Load RAG Pipeline (cached)
-# ---------------------------------------------------------
-@st.cache_resource(show_spinner=True)
-def load_pipeline():
-    store = FaissStore()
-    try:
-        store.load_store()
-        logger.info("FAISS store loaded successfully.")
-    except DocumentLoadError:
-        logger.warning("FAISS index not found. Initializing empty FAISS store.")
-    except Exception as e:
-        logger.error(f"Unexpected FAISS load error: {e}")
-        store.vector_store = None
+# --- UI Setup & Styling ---
+st.set_page_config(page_title="Privacy Advice", layout="centered", page_icon="🤖")
 
-    pipeline = RAGPipeline(
-        vector_store=store,
-        temperature=settings.llm_temperature,
-        streaming=True,
-    )
-
-    return pipeline
-
-rag = load_pipeline()
-
-# ---------------------------------------------------------
-# UI Setup
-# ---------------------------------------------------------
-st.set_page_config(
-    page_title="AI Buddy",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
-
-# Light theme styling
+# Custom CSS for a dark mode interface
 st.markdown("""
 <style>
-body, .block-container {
-    background-color: #ffffff;
-    color: #000000;
-}
-.user-msg {
-    background-color: #DCF8C6;
-    padding: 10px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-}
-.ai-msg {
-    background-color: #F1F1F1;
-    padding: 10px;
-    border-radius: 10px;
-    margin-bottom: 8px;
-}
+    .stApp { background-color: #121212; color: #E0E0E0; }
+    .user-msg { 
+        background-color: #2C3E50; color: #FFFFFF; padding: 15px; 
+        border-radius: 15px; margin-bottom: 10px; margin-left: auto; width: fit-content; max-width: 85%; 
+        border-bottom-right-radius: 2px;
+    }
+    .ai-msg { 
+        background-color: #1E1E1E; color: #F0F0F0; padding: 15px; 
+        border-radius: 15px; margin-bottom: 10px; border-bottom-left-radius: 2px;
+        border: 1px solid #333; width: fit-content; max-width: 85%;
+    }
+    .source-card {
+        background-color: #181818; border: 1px solid #444; padding: 10px; border-radius: 8px; margin-top: 5px;
+    }
+    h1, h2, h3, .stExpander { color: #BB86FC !important; }
 </style>
 """, unsafe_allow_html=True)
 
-st.subheader("My AI Buddy")
-st.markdown("###### Let AI speak on Australian privacy law")
-# st.caption("LLM • RAG • HuggingFace • LangChain • FAISS")
-st.caption("Design & development: Abdul Bari (abdulbari80@gmail.com)")
+# --- Logic: Load Advanced Pipeline ---
+@st.cache_resource(show_spinner="Initializing ...")
+def load_rag_pipeline():
+    """
+    Initializes the Hybrid Store and RAG Pipeline.
+    Uses st.cache_resource to prevent reloading the model on every interaction.
+    """
+    store = HybridStore()
+    try:
+        # Attempt to load existing local indices
+        store.load_store()
+        logger.info("Successfully loaded FAISS and BM25 indices.")
+    except Exception as e:
+        st.error(f"Failed to load indices: {e}. Please ensure indices are created.")
+        return None
 
-# ---------------------------------------------------------
-# Initialize Session State
-# ---------------------------------------------------------
+    # Initialize Pipeline with Reranker and gpt-4.1-nano
+    pipeline = RAGPipeline(hybrid_store=store)
+    return pipeline
+
+rag_engine = load_rag_pipeline()
+
+# --- State Management ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "show_context" not in st.session_state:
-    st.session_state.show_context = False
+if "faq_query" not in st.session_state:
+    st.session_state.faq_query = None
 
-# ---------------------------------------------------------
-# Sidebar Settings
-# ---------------------------------------------------------
+# --- Helper to use Base64 in HTML ---
+def get_icon_html(b64_string, size=30):
+    return f'<img src="data:image/png;base64,{b64_string}" width="{size}">'
+
+# --- Sidebar Configuration ---
 with st.sidebar:
-    st.header("Settings")
-    top_k = st.number_input("Top-K documents", 1, 10, settings.top_k)
-    st.session_state.show_context = st.checkbox("Show Retrieved Context", value=False)
-    if st.button("Clear Chat"):
+    st.title("⚙️ Settings") 
+    st.markdown("Adjust precision/ recall values")
+    
+    # UI controls for retrieval depth
+    top_k_retrieve = st.slider("Recall Depth (Hybrid Search)", 5, 50, 20)
+    top_k_rerank = st.slider("Precision Depth (Rerank)", 1, 10, 5)
+    
+    show_context = st.checkbox("Show retrieved context", value=False)
+    
+    if st.button("🗑️ Clear Chat History"):
         st.session_state.messages = []
+        st.rerun()
+
     st.markdown("---")
-    st.caption("LangChain • Hugging Face • Llama-3.2-1B-Instruct • FAISS • Streamlit Cloud")
+    st.header("💡 Common Inquiries")
+    faqs = [
+        {"label": "What is NDB?", 
+         "query": "Explain the Notifiable Data Breach (NDB) scheme."},
+        {"label": "Privacy Principles", 
+         "query": "What are the 13 Australian Privacy Principles (APPs)?"},
+        {"label": "Application Range", 
+         "query": "Does the Privacy Act 1988 apply to small businesses?"}
+    ]
+    for faq in faqs:
+        if st.button(faq["label"], use_container_width=True):
+            st.session_state.faq_query = faq["query"]
+            st.rerun()
 
-# ---------------------------------------------------------
-# Display Chat History (top)
-# ---------------------------------------------------------
+# --- Main Chat UI ---
+st.title("Privacy AI Buddy✨")
+st.caption("AI-Powered Advisory for the Australian Privacy Act 1988")
+
+# Render historical messages
 for msg in st.session_state.messages:
-    if msg["role"] == "user":
-        st.markdown(f"<div class='user-msg'>{msg['text']}</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='ai-msg'>{msg['text']}</div>", unsafe_allow_html=True)
-        if st.session_state.show_context and msg.get("docs"):
-            with st.expander("Retrieved Context"):
-                for d in msg["docs"]:
-                    st.markdown(d["content"])
-                    st.caption(d["metadata"])
+    role_class = "user-msg" if msg["role"] == "user" else "ai-msg"
+    st.markdown(f"<div class='{role_class}'>{msg['text']}</div>", unsafe_allow_html=True)
+    
+    # Render Sources if available and enabled
+    if show_context and msg.get("docs") and msg["role"] == "assistant":
+        with st.expander("📚 Verified Legal Sources"):
+            for d in msg["docs"]:
+                # Safe access to metadata
+                score = d.metadata.get('relevance_score', 0)
+                unit_id = d.metadata.get('unit_id', 'General Provision')
+                
+                st.markdown(f"""
+                <div class='source-card'>
+                    <strong>Section:</strong> {unit_id} | <strong>Relevance:</strong> {score:.2f}<br>
+                    <small>{d.page_content[:250]}...</small>
+                </div>
+                """, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# Chat Input (bottom)
-# ---------------------------------------------------------
-user_input = st.chat_input("Ask anything on privacy law ...")
+# --- Input Handling ---
+user_input = st.chat_input("Ask about privacy law")
+# Prioritize FAQ button clicks over text input
+current_query = st.session_state.faq_query or user_input
 
-if user_input:
-    # Store user message
-    st.session_state.messages.append({
-        "role": "user",
-        "text": user_input,
-        "docs": []
-    })
-    st.markdown(f"<div class='user-msg'>{user_input}</div>", unsafe_allow_html=True)
+if current_query:
+    # 1. Add User message to UI
+    st.session_state.messages.append({"role": "user", "text": current_query})
+    st.markdown(f"<div class='user-msg'>{current_query}</div>", unsafe_allow_html=True)
+    
+    # Reset FAQ state for next turn
+    st.session_state.faq_query = None
 
-    # ---------------------------------------------------------
-    # Streaming RAG LLM Output
-    # ---------------------------------------------------------
+    # 2. Generate Response via LCEL Chain
     with st.spinner("Thinking..."):
         try:
-            stream = rag.generate_streaming(
-                query=user_input,
-                top_k=top_k,
-                include_docs=True
-            )
+            # Build and Invoke the chain
+            # Pass the query as a dict to satisfy RunnableParallel structure
+            chain = rag_engine.build_chain()
+            output = chain.invoke({"question": current_query})
+            
+            # The chain returns a dict: {"answer": str, "docs": List[Document]}
+            ai_answer = output["answer"]
+            retrieved_docs = output["docs"]
 
-            ai_box = st.empty()
-            final_text = "Thanks for asking. "
-            final_docs = []
-
-            for chunk in stream:
-                if "token" in chunk:
-                    final_text += chunk["token"]
-                    ai_box.markdown(
-                        f"<div class='ai-msg'>{final_text}</div>",
-                        unsafe_allow_html=True
-                    )
-
-                if "docs" in chunk:
-                    final_docs = [
-                        {"content": d.page_content, "metadata": d.metadata or {}}
-                        for d in chunk["docs"]
-                    ]
-
+            # Display AI Response
+            st.markdown(f"<div class='ai-msg'>{ai_answer}</div>", unsafe_allow_html=True)
+            
+            # 3. Persist to session state
             st.session_state.messages.append({
                 "role": "assistant",
-                "text": final_text,
-                "docs": final_docs
+                "text": ai_answer,
+                "docs": retrieved_docs
             })
+            
+            # Force rerun to update scroll position and show context
+            st.rerun()
 
         except Exception as e:
-            st.error(f"Error: {e}")
-
+            logger.exception("Error in Streamlit execution loop")
+            st.error(f"Pipeline Error: {e}")

@@ -15,12 +15,13 @@ class Settings:
     """
     
     # --- Data & Chunking Settings ---
-    data_dir: str = os.getenv("DATA_DIR", "data/pdf/Australian_Privacy_Act.pdf")
+    data_dir: str = os.getenv("DATA_DIR", "data/Australian_Privacy_Act.pdf")
     chunk_size: int = int(os.getenv("CHUNK_SIZE", 1000))
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 200))
+    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", 150))
     
     # --- Embedding & FAISS Settings ---
-    faiss_index_dir: str = os.getenv("FAISS_INDEX_DIR", "vector_store/faiss_index")
+    faiss_index_dir: str = os.getenv("FAISS_INDEX_DIR", "hybrid_store/faiss_index")
+    bm25_index_dir: str = os.getenv("BM25_INDEX_DIR", "hybrid_store/bm25_index")
     # Setting default to OpenAI's high-performance model for 768 dim compatibility
     embedding_model_name: str = os.getenv(
         "EMBEDDING_MODEL_NAME", 

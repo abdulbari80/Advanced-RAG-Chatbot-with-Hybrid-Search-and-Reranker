@@ -20,11 +20,14 @@ from src.rag.exception import (
 
 logger = get_logger(__name__)
 
+OPENAI_API_KEY = settings.openai_api_key
+EMBEDDING_MODEL_NAME = settings.embedding_model_name
+
 class HybridStore:
     """
     Manages both Dense (FAISS) and Sparse (BM25) indices.
     
-    Provides functionality to create, persist, and load a hybrid ensemble 
+    Provides functionality to create, persist, and load a hybrid (ensemble) 
     retriever optimized for legal document retrieval.
     """
 
@@ -38,19 +41,18 @@ class HybridStore:
         self.faiss_dir.mkdir(parents=True, exist_ok=True)
         self.bm25_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Initialize Embedding Model
+        # Initialize Embedding Model
         if embedding_model:
             self.embedding_model = embedding_model
-        elif settings.openai_api_key and 'text-embedding' in settings.embedding_model_name:
-            logger.info(f"Using OpenAI Embeddings: {settings.embedding_model_name}")
+        elif OPENAI_API_KEY and 'text-embedding' in EMBEDDING_MODEL_NAME:
+            logger.info(f"Using OpenAI Embeddings: {EMBEDDING_MODEL_NAME}")
             self.embedding_model = OpenAIEmbeddings(
-                model=settings.embedding_model_name, 
-                openai_api_key=settings.openai_api_key
+                model=EMBEDDING_MODEL_NAME, 
+                openai_api_key=OPENAI_API_KEY
             )
-            logger.info("OpenAI Embedding model initialized.")
         else:
-            logger.info(f"Using HF Embeddings: {settings.embedding_model_name}")
-            self.embedding_model = HuggingFaceEmbeddings(model_name=settings.embedding_model_name)
+            logger.info(f"Using HF Embeddings: {EMBEDDING_MODEL_NAME}")
+            self.embedding_model = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
 
         self.vector_store: Optional[FAISS] = None
         self.bm25_retriever: Optional[BM25Retriever] = None
@@ -60,18 +62,19 @@ class HybridStore:
         Creates both FAISS and BM25 indices from chunks. 
         Automatically overrides existing indices if present.
         """
-        if not chunks:
-            raise ValueError("No chunks provided for indexing.")
-
         # Check if index already exists for logging purposes
         if (self.faiss_dir / "index.faiss").exists():
-            logger.info("Existing index found. Overriding with updated documents...")
+            logger.info("Index already exists. Overriding with new documents...")
 
         try:
+            if not chunks:
+                raise ValueError("No chunks available for indexing.")
+
+            # Convert chunks to 'Document' data type
             documents: List[Document] = []
             for chunk in chunks:
                 meta = chunk.get('metadata', {})
-                # Professional metadata injection for enhanced Sparse retrieval
+                # Inject key metadata for enhanced sparse retrieval
                 enhanced_text = f"ID: {meta.get('unit_id', '')} Title: {meta.get('unit_title', '')}\n{chunk['text']}"
                 documents.append(Document(page_content=enhanced_text, metadata=meta))
 
@@ -126,7 +129,7 @@ class HybridStore:
         weight_dense: float = 0.5
     ) -> EnsembleRetriever:
         """
-        Constructs and returns a Hybrid EnsembleRetriever.
+        Constructs and returns EnsembleRetriever.
         """
         if not self.vector_store or not self.bm25_retriever:
             logger.error("Attempted to retrieve without loading stores.")
