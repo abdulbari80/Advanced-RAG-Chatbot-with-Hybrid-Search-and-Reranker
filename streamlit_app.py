@@ -95,8 +95,9 @@ with st.sidebar:
         if st.button(faq["label"], use_container_width=True):
             st.session_state.faq_query = faq["query"]
             st.rerun()
-
-    with st.expander("ℹ️ About the Project"):
+            
+    st.markdown("---")
+    with st.expander("ℹ️ Project Owner"):
         st.write("""
         Design & development by: 
         **Abdul Bari, AI Engineer** 
