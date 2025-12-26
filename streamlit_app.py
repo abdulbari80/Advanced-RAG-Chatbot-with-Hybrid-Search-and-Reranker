@@ -97,7 +97,7 @@ with st.sidebar:
             st.rerun()
 
 # --- Main Chat UI ---
-st.title("Privacy AI Buddy✨")
+st.title("My AI Buddy✨")
 st.caption("AI-Powered Advisory for the Australian Privacy Act 1988")
 
 # Render historical messages
