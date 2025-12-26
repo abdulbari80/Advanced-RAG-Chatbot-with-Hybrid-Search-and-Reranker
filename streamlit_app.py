@@ -72,7 +72,7 @@ with st.sidebar:
     st.markdown("Adjust precision/ recall values")
     
     # UI controls for retrieval depth
-    top_k_retrieve = st.slider("Recall Depth (Hybrid Search)", 5, 50, 20)
+    top_k_retrieve = st.slider("Recall Depth (Hybrid Search)", 5, 30, 20)
     top_k_rerank = st.slider("Precision Depth (Rerank)", 1, 10, 5)
     
     show_context = st.checkbox("Show retrieved context", value=False)
@@ -84,11 +84,11 @@ with st.sidebar:
     st.markdown("---")
     st.header("💡 Common Inquiries")
     faqs = [
-        {"label": "What is NDB?", 
+        {"label": "Explain NDB", 
          "query": "Explain the Notifiable Data Breach (NDB) scheme."},
         {"label": "Privacy Principles", 
          "query": "What are the 13 Australian Privacy Principles (APPs)?"},
-        {"label": "Application Range", 
+        {"label": "Small Businesses", 
          "query": "Does the Privacy Act 1988 apply to small businesses?"}
     ]
     for faq in faqs:
@@ -97,7 +97,7 @@ with st.sidebar:
             st.rerun()
 
 # --- Main Chat UI ---
-st.title("My AI Buddy✨")
+st.title("Privacy Law Chatbot✨")
 st.caption("AI-Powered Advisory for the Australian Privacy Act 1988")
 
 # Render historical messages
@@ -121,7 +121,7 @@ for msg in st.session_state.messages:
                 """, unsafe_allow_html=True)
 
 # --- Input Handling ---
-user_input = st.chat_input("Ask about privacy law")
+user_input = st.chat_input("Ask about privacy regulations")
 # Prioritize FAQ button clicks over text input
 current_query = st.session_state.faq_query or user_input
 
