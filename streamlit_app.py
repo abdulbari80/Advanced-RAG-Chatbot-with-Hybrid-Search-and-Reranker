@@ -96,6 +96,15 @@ with st.sidebar:
             st.session_state.faq_query = faq["query"]
             st.rerun()
 
+    with st.expander("ℹ️ About the Project"):
+        st.write("""
+        Design & development by: 
+        **Abdul Bari, AI Engineer** 
+        as part of AI for good initiatives.        
+        Please drop iquiries or feedback to:  
+        bari.a.au@gmail.com
+        """)
+
 # --- Main Chat UI ---
 st.title("Privacy Law Chatbot✨")
 st.caption("AI-Powered Advisory for the Australian Privacy Act 1988")
