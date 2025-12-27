@@ -29,34 +29,34 @@ graph TD
 An enterprise-grade Retrieval-Augmented Generation (RAG) system specialized in the **Australian Privacy Act 1988**. This system utilizes a **Two-Stage Retrieval** architecture (Bi-Encoder + Cross-Encoder) to provide cited, grounded, and legally-aligned advisory responses.
 
 ## 🎯 Engineering Philosophy
-Legal documents present unique challenges for standard RAG pipelines: complex hierarchies, interdependent clauses, and the high cost of "hallucinated" advice. This project addresses these via:
+   Legal documents present unique challenges for standard RAG pipelines: complex hierarchies, interdependent clauses, and the high cost of "hallucinated" advice. This project addresses these via:
 * **Structural Integrity:** Legislative-aware chunking that preserves context.
 * **Hybrid Search:** Merging semantic (FAISS) and keyword (BM25) search to capture both intent and specific citations. Ensemble retrieval technique is applied with a balanced weight attribution between dense and sparse indices after a couple of trials.  
 * **Precision Funneling:** A Cross-Encoder reranking stage to filter out low-confidence context before LLM generation.
 
 ## 🛠 Technical Deep Dive
 1. Domain-Specific Ingestion (The Chunker)
-<p> Unlike naive character splitters, the DocumentChunker utilizes a Hierarchical Regex Strategy to mirror the Act's structure:
+   Unlike naive character splitters, the DocumentChunker utilizes a Hierarchical Regex Strategy to mirror the Act's structure:
 
-Segmentation: Distinguishes between the Main Act and Schedule 1 (Australian Privacy Principles) and other Schedules.
+   Segmentation: Distinguishes between the Main Act and Schedule 1 (Australian Privacy Principles) and other Schedules.
 
-Unit Detection: Locates Sections, APPs, Clauses, and Subsections to ensure embeddings contain complete legal thoughts.
+   Unit Detection: Locates Sections, APPs, Clauses, and Subsections to ensure embeddings contain complete legal thoughts.
 
-Metadata Injection: Every chunk is enriched with its unit_id and unit_title, enabling the BM25 retriever to provide citations accurately.
-</p>
+   Metadata Injection: Every chunk is enriched with its unit_id and unit_title, enabling the BM25 retriever to provide citations accurately.
+
 2. Two-Stage Hybrid Retrieval
-To solve the "Needle in a Haystack" problem, the system employs a two-stage funnel:
+   To solve the "Needle in a Haystack" problem, the system employs a two-stage funnel:
 
-Recall Stage (Hybrid Search): Uses Reciprocal Rank Fusion (RRF) to combine dense vectors from FAISS with sparse keyword scores from BM25.
+   Recall Stage (Hybrid Search): Uses Reciprocal Rank Fusion (RRF) to combine dense vectors from FAISS with sparse keyword scores from BM25.
 
-Precision Stage (Reranking): Uses a Cross-Encoder (ms-marco-MiniLM) to perform a computationally expensive but highly accurate relevance check on the top candidates.
+   Precision Stage (Reranking): Uses a Cross-Encoder (ms-marco-MiniLM) to perform a computationally expensive but highly accurate relevance check on the top candidates.
 
 3. Grounded Generation & Guardrails
-The LLM is governed by a Modular System Prompt using Markdown delimitation (###) for clear instruction-following. It implements a "Silence over Falsehood" policy:
+   The LLM is governed by a Modular System Prompt using Markdown delimitation (###) for clear instruction-following. It implements a "Silence over Falsehood" policy:
 
-Confidence Thresholding: If the Reranker returns scores below a specific threshold, the pipeline triggers a "Safe Refusal" rather than guessing an answer.
+   Confidence Thresholding: If the Reranker returns scores below a specific threshold, the pipeline triggers a "Safe Refusal" rather than guessing an answer.
 
-Strict Grounding: The model is prohibited from using internal knowledge, forcing it to cite the provided legal context.
+   Strict Grounding: The model is prohibited from using internal knowledge, forcing it to cite the provided legal context.
 
 ## 🚀 Deployment & AIOps
 * **Optimized Resource Management:** Uses Streamlit's @st.cache_resource to manage memory-intensive models (Reranker and Vector Store) on CPU-bound environments.
@@ -67,7 +67,7 @@ Strict Grounding: The model is prohibited from using internal knowledge, forcing
 
 ## 🏗 Modular Architecture
 
-The codebase follows a modular design pattern, ensuring that the data ingestion, search indexing, and generation logic are decoupled and independently scalable.
+   The codebase follows a modular design pattern, ensuring that the data ingestion, search indexing, and generation logic are decoupled and independently scalable.
 
 ```text
 ├── src/rag/
