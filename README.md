@@ -10,7 +10,7 @@ graph TD
 
     %% Define the Retrieval Flow
     User([User Query]) --> Rewrite[Query Expansion / Rewriting]
-    Rewrite --> Retrieval{Hybrid Search (Ensemble Retrieval)}
+    Rewrite --> Retrieval{Hybrid Search}
     
     VDB <--> Retrieval
     
@@ -31,7 +31,7 @@ An enterprise-grade Retrieval-Augmented Generation (RAG) system specialized in t
 ## 🎯 Engineering Philosophy
 Legal documents present unique challenges for standard RAG pipelines: complex hierarchies, interdependent clauses, and the high cost of "hallucinated" advice. This project addresses these via:
 * **Structural Integrity:** Legislative-aware chunking that preserves context.
-* **Hybrid Search:** Merging semantic (FAISS) and keyword (BM25) search to capture both intent and specific citations.
+* **Hybrid Search:** Merging semantic (FAISS) and keyword (BM25) search to capture both intent and specific citations. Ensemble retrieval technique is applied with a balanced weight attribution between dense and sparse indices after a couple of trials.  
 * **Precision Funneling:** A Cross-Encoder reranking stage to filter out low-confidence context before LLM generation.
 
 ## 🛠 Technical Deep Dive
