@@ -11,7 +11,7 @@ from src.rag.logger import get_logger
 logger = get_logger(__name__)
 
 # --- UI Setup & Styling ---
-st.set_page_config(page_title="Privacy Advice", layout="centered", page_icon="🤖")
+st.set_page_config(page_title="Law AI Bot", layout="centered", page_icon="🤖")
 
 # Custom CSS for a dark mode interface
 st.markdown("""
