@@ -10,7 +10,7 @@ graph TD
 
     %% Define the Retrieval Flow
     User([User Query]) --> Rewrite[Query Expansion / Rewriting]
-    Rewrite --> Retrieval{Hybrid Search}
+    Rewrite --> Retrieval{Hybrid Search & Ensemble Retrieval}
     
     VDB <--> Retrieval
     
@@ -26,37 +26,39 @@ graph TD
     style Retrieval fill:#24283b,stroke:#d4a017,stroke-width:2px
     style LLM fill:#24283b,stroke:#01579b,stroke-width:2px
 ```
-An enterprise-grade Retrieval-Augmented Generation (RAG) system specialized in the **Australian Privacy Act 1988**. This system utilizes a **Two-Stage Retrieval** architecture (Bi-Encoder + Cross-Encoder) to provide cited, grounded, and legally-aligned advisory responses.
+An enterprise-grade Retrieval-Augmented Generation (RAG) system specialised in the **Australian Privacy Act 1988**. This utilises a **Two-stage retrieval** architecture (Bi-Encoder + Cross-Encoder) to provide cited, grounded, and legally-aligned advisory responses.
 
 ## 🎯 Engineering Philosophy
-   Legal documents present unique challenges for standard RAG pipelines: complex hierarchies, interdependent clauses, and the high cost of "hallucinated" advice. This project addresses these via:
-* **Structural Integrity:** Legislative-aware chunking that preserves context.
+
+   Legal documents present a unique set of challenges for standard RAG pipelines: complex hierarchies, interdependent clauses, exceptions, exemptions, and a high risk of "hallucinated" response. This project addresses these challenges with the following tools and strategies:
+
+* **Structural Integrity:** Legislation-aware chunking that preserves context.
 * **Hybrid Search:** Merging semantic (FAISS) and keyword (BM25) search to capture both intent and specific citations. Ensemble retrieval technique is applied with a balanced weight attribution between dense and sparse indices after a couple of trials.  
 * **Precision Funneling:** A Cross-Encoder reranking stage to filter out low-confidence context before LLM generation.
 
 ## 🛠 Technical Deep Dive
-1. Domain-Specific Ingestion (The Chunker)
-   Unlike naive character splitters, the DocumentChunker utilizes a Hierarchical Regex Strategy to mirror the Act's structure:
+1. **Domain-Specific Ingestion (The Chunker):** Unlike naive character splitters, the
+   DocumentChunker utilises a Hierarchical Regex Strategy to mirror the Act's structure:
 
-   Segmentation: Distinguishes between the Main Act and Schedule 1 (Australian Privacy Principles) and other Schedules.
+   *Segmentation:* Distinguishes between the Main Act and Schedule 1 (Australian Privacy Principles) and other Schedules.
 
-   Unit Detection: Locates Sections, APPs, Clauses, and Subsections to ensure embeddings contain complete legal thoughts.
+   *Unit Detection:* Locates sections, subsections, APPs, and clauses to ensure embeddings contain complete legal structures and semantics.
 
-   Metadata Injection: Every chunk is enriched with its unit_id and unit_title, enabling the BM25 retriever to provide citations accurately.
+   *Metadata Injection:* Every chunk is enriched with its unit_id (section/ clause number) and unit_title (major divisions), enabling the BM25 retriever to provide citations accurately and appropriately.
 
-2. Two-Stage Hybrid Retrieval
-   To solve the "Needle in a Haystack" problem, the system employs a two-stage funnel:
+2. **Two-Stage Hybrid Retrieval:** To solve the "Needle in a Haystack" problem, 
+   the system employs a two-stage funnel:
 
-   Recall Stage (Hybrid Search): Uses Reciprocal Rank Fusion (RRF) to combine dense vectors from FAISS with sparse keyword scores from BM25.
+   *Recall Stage (Hybrid Search):* Uses Reciprocal Rank Fusion (RRF) to combine dense vectors from FAISS with sparse keyword scores from BM25.
 
-   Precision Stage (Reranking): Uses a Cross-Encoder (ms-marco-MiniLM) to perform a computationally expensive but highly accurate relevance check on the top candidates.
+   *Precision Stage (Reranking):* Uses a Cross-Encoder (ms-marco-MiniLM) to perform a computationally expensive but highly accurate relevance check on the top candidates.
 
-3. Grounded Generation & Guardrails
-   The LLM is governed by a Modular System Prompt using Markdown delimitation (###) for clear instruction-following. It implements a "Silence over Falsehood" policy:
+3. **Grounded Generation & Guardrails:** The LLM is governed by a Modular System Prompt
+    using Markdown delimitation (###) for clear instruction-following. It implements a "Silence over Falsehood" policy:
 
-   Confidence Thresholding: If the Reranker returns scores below a specific threshold, the pipeline triggers a "Safe Refusal" rather than guessing an answer.
+   *Confidence Thresholding:* If the Reranker returns scores below a specific threshold, the pipeline triggers a "Safe Refusal" rather than guessing an answer.
 
-   Strict Grounding: The model is prohibited from using internal knowledge, forcing it to cite the provided legal context.
+   *Strict Grounding:* The model is prohibited from using internal knowledge, forcing it to cite the provided legal context.
 
 ## 🚀 Deployment & AIOps
 * **Optimized Resource Management:** Uses Streamlit's @st.cache_resource to manage memory-intensive models (Reranker and Vector Store) on CPU-bound environments.
@@ -71,11 +73,11 @@ An enterprise-grade Retrieval-Augmented Generation (RAG) system specialized in t
 
 ```text
 ├── src/rag/
-│   ├── chunker.py        # Legislative-aware PDF parser and hierarchical splitter
+│   ├── chunker.py        # Legislation-aware PDF parser and hierarchical splitter
 │   ├── hybrid_store.py   # Dual-index management (FAISS & BM25) with RRF
-│   ├── rag_pipeline.py   # LCEL orchestration, Reranking, and Grounded Generation
-│   ├── exception.py     # Domain-specific custome error handling & hierarchy for AIOps
-│   ├── config.py         # Centralized environment and model settings
+│   ├── rag_pipeline.py   # LCEL orchestration, reranking, and grounded generation
+│   ├── exception.py      # Domain-specific custom error handling & hierarchy for AIOps
+│   ├── config.py         # Centralised environment and model settings
 │   └── logger.py         # Structured telemetry and pipeline logging
 ├── hybrid_store/
 │   ├── bm25_store
@@ -84,7 +86,7 @@ An enterprise-grade Retrieval-Augmented Generation (RAG) system specialized in t
 │        ├── index.faiss            # Dense indices (for semantic search)
 │        └── index.pkl
 │
-├── streamlit_app.py      # Streamlit UI with Recall/Precision depth controls
+├── streamlit_app.py      # Streamlit UI with Recall/ Precision depth controls
 ├── README.md             # Description of the project and AIOps steps followed
 └── requirements.txt      # Project dependencies
 ```
