@@ -10,7 +10,7 @@ graph TD
 
     %% Define the Retrieval Flow
     User([User Query]) --> Rewrite[Query Expansion / Rewriting]
-    Rewrite --> Retrieval{Hybrid Search & Ensemble Retrieval}
+    Rewrite --> Retrieval{Hybrid Search +<br/>Ensemble Retrieval}
     
     VDB <--> Retrieval
     
