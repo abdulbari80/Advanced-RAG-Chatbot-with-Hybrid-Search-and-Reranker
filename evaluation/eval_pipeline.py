@@ -8,7 +8,8 @@ from openai import OpenAI
 
 from ragas import evaluate
 from ragas.llms import llm_factory
-from ragas.embeddings import OpenAIEmbeddings
+# from ragas.embeddings import OpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from ragas.metrics import Faithfulness, AnswerRelevancy
 
 from src.rag.logger import get_logger
@@ -49,8 +50,11 @@ def load_eval_dataset():
 # --------------------
 def get_ragas_eval():
     eval_data = load_eval_dataset()
-    questions = eval_data["questions"]
-    ground_truth = eval_data["answers"]
+    questions = []
+    ground_truth = []
+    for item in eval_data:
+        questions.append(item["question"])
+        ground_truth.append(item["ground_truth"])
     
     logger.info(f"Loaded {len(questions)} questions for evaluation.")
 
@@ -99,12 +103,14 @@ def get_ragas_eval():
     # Configuration
     # --------------------
     client = OpenAI(api_key=OPENAI_API_KEY)
-    llm = llm_factory(model="gpt-4o-mini", client=client)
+    llm = llm_factory(model="gpt-4o-mini",
+                      client=client,
+                      temperature=0,
+                      max_tokens=2048)
     
-    # FIX: Use consistent config variable instead of os.getenv
     embeddings = OpenAIEmbeddings(
         model="text-embedding-3-large", 
-        client=client
+        api_key=OPENAI_API_KEY
     )
 
     metrics = [
@@ -118,15 +124,15 @@ def get_ragas_eval():
     logger.info("Starting Ragas evaluation...")
     results = evaluate(
         dataset=dataset,
-        metrics=metrics
+        metrics=metrics,
+        llm=llm,
+        embeddings=embeddings
     )
 
     # --------------------
     # Save results
     # --------------------
     output_path = Path("evaluation/eval_report.csv")
-    
-    # FIX: Ensure directory exists before attempting to save
     output_path.parent.mkdir(parents=True, exist_ok=True) 
     
     results.to_pandas().to_csv(output_path, index=False)

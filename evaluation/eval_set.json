@@ -1,20 +1,35 @@
-{
-    "questions": [
-        "Does the Privacy Act 1988 apply to a small business with a $2M turnover?",
-        "What is an Eligible Data Breach under the NDB scheme?"
-    ],
+[
+  {
+    "question": "Can an organisation use personal information for a secondary purpose?",
+    "ground_truth": "Personal information may only be used for a secondary purpose if an exception applies, such as consent or where the secondary purpose is related to the primary purpose and reasonably expected.",
     "contexts": [
-        [
-            "The Privacy Act 1988 generally exempts small businesses with an annual turnover of $3 million or less, unless they trade in personal information, provide health services, or are a credit reporting agency.",
-            "SMEs with turnover under $3 million must still comply if they are related to a larger corporate entity covered by the Act."
-        ],
-        [
-            "An Eligible Data Breach occurs under the Notifiable Data Breaches (NDB) scheme when personal information is accessed or disclosed without authorization, and this is likely to result in serious harm to individuals.",
-            "Entities must notify the OAIC and affected individuals as soon as practicable once an eligible breach is confirmed."
-        ]
-    ],
-    "answers": [
-        "No, the Privacy Act 1988 does not apply to small businesses with a $2M turnover because the statutory threshold is set at $3 million, provided they do not deal with health records or trade in personal data.",
-        "An Eligible Data Breach happens when there is unauthorized access to personal info that is highly likely to cause serious harm. You also have to notify the OAIC."
+      "APP 6.2 provides exceptions allowing use or disclosure for secondary purposes."
+    ]
+  },
+  
+  {
+    "question": "When does the Notifiable Data Breaches scheme require notification?",
+    "ground_truth": "Notification is required when an eligible data breach occurs and is likely to result in serious harm to affected individuals.",
+    "contexts": [
+      "Part IIIC establishes the Notifiable Data Breaches scheme and the concept of an eligible data breach."
+    ]
+  },
+
+
+  {
+    "question": "Does the Privacy Act apply to all small businesses?",
+    "ground_truth": "No. Many small businesses are exempt unless a specific exception applies, such as trading in personal information or being a health service provider.",
+    "contexts": [
+      "The small business exemption applies to entities with annual turnover below the prescribed threshold unless exceptions apply."
+    ]
+  },
+  
+  {
+  "question": "A university wants to collect students' health information for a wellbeing program. Under APP 3, can it do so without consent?",
+  "ground_truth": "Generally no. Health information is sensitive information and consent is required unless a specific exception under APP 3 applies.",
+  "contexts": [
+    "APP 3.3 prohibits collection of sensitive information unless consent is obtained or an exception applies.",
+    "Health information is classified as sensitive information."
     ]
     }
+]
