@@ -11,7 +11,7 @@ from src.rag.logger import get_logger
 logger = get_logger(__name__)
 
 # --- UI Setup & Styling ---
-st.set_page_config(page_title="Law AI Bot", layout="centered", page_icon="🤖")
+st.set_page_config(page_title="Law AI Chatbot", layout="centered", page_icon="🤖")
 
 # Custom CSS for a dark mode interface
 st.markdown("""
@@ -149,14 +149,14 @@ user_input = st.chat_input("Ask about privacy regulations")
 current_query = st.session_state.faq_query or user_input
 
 if current_query:
-    # 1. Add User message to UI
+    # Add User message to UI
     st.session_state.messages.append({"role": "user", "text": current_query})
     st.markdown(f"<div class='user-msg'>{current_query}</div>", unsafe_allow_html=True)
     
     # Reset FAQ state for next turn
     st.session_state.faq_query = None
 
-    # 2. Generate Response via LCEL Chain
+    # Generate Response via LCEL Chain
     with st.spinner("Thinking..."):
         try:
             # Build and Invoke the chain
@@ -171,7 +171,7 @@ if current_query:
             # Display AI Response
             st.markdown(f"<div class='ai-msg'>{ai_answer}</div>", unsafe_allow_html=True)
             
-            # 3. Persist to session state
+            # Persist to session state
             st.session_state.messages.append({
                 "role": "assistant",
                 "text": ai_answer,

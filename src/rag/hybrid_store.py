@@ -105,12 +105,12 @@ class HybridStore:
                 )
                 documents.append(Document(page_content=enhanced_text, metadata=meta))
 
-            # 1. Build and Persist FAISS (Dense/Semantic Search)
+            # Build and Persist FAISS (Dense/Semantic Search)
             logger.info("Generating embeddings and building FAISS index...")
             self.vector_store = FAISS.from_documents(documents, self.embedding_model)
             self.vector_store.save_local(str(self.faiss_dir))
 
-            # 2. Build and Persist BM25 (Sparse/Keyword Search)
+            # Build and Persist BM25 (Sparse/Keyword Search)
             logger.info("Building BM25 keyword index...")
             self.bm25_retriever = BM25Retriever.from_documents(documents)
             
