@@ -1,0 +1,20 @@
+{
+    "questions": [
+        "Does the Privacy Act 1988 apply to a small business with a $2M turnover?",
+        "What is an Eligible Data Breach under the NDB scheme?"
+    ],
+    "contexts": [
+        [
+            "The Privacy Act 1988 generally exempts small businesses with an annual turnover of $3 million or less, unless they trade in personal information, provide health services, or are a credit reporting agency.",
+            "SMEs with turnover under $3 million must still comply if they are related to a larger corporate entity covered by the Act."
+        ],
+        [
+            "An Eligible Data Breach occurs under the Notifiable Data Breaches (NDB) scheme when personal information is accessed or disclosed without authorization, and this is likely to result in serious harm to individuals.",
+            "Entities must notify the OAIC and affected individuals as soon as practicable once an eligible breach is confirmed."
+        ]
+    ],
+    "answers": [
+        "No, the Privacy Act 1988 does not apply to small businesses with a $2M turnover because the statutory threshold is set at $3 million, provided they do not deal with health records or trade in personal data.",
+        "An Eligible Data Breach happens when there is unauthorized access to personal info that is highly likely to cause serious harm. You also have to notify the OAIC."
+    ]
+    }
