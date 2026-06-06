@@ -60,6 +60,18 @@ An enterprise-grade Retrieval-Augmented Generation (RAG) system specialised in t
 
    *Strict Grounding:* The model is prohibited from using internal knowledge, forcing it to cite the provided legal context.
 
+## Evaluation Framework
+
+This project incorporates the RAGAS framework to quantitatively evaluate the performance of the Retrieval-Augmented Generation (RAG) pipeline. Using a benchmark dataset derived from the Australian Privacy Act 1988, the evaluation process measures both response quality and retrieval effectiveness through automated LLM-based assessment.
+
+The current evaluation suite includes:
+
+* **Faithfulness** – Verifies that generated answers are grounded in the retrieved context.
+* **Answer Relevancy** – Measures how effectively responses address the user's query.
+
+Evaluation reports are generated automatically, enabling consistent benchmarking and comparison of retrieval strategies, prompt variations, and model configurations.
+
+
 ## 🚀 Deployment & AIOps
 * **Optimized Resource Management:** Uses Streamlit's @st.cache_resource to manage memory-intensive models (Reranker and Vector Store) on CPU-bound environments.
 
@@ -86,6 +98,12 @@ An enterprise-grade Retrieval-Augmented Generation (RAG) system specialised in t
 │        ├── index.faiss            # Dense indices (for semantic search)
 │        └── index.pkl
 │
+│
+├── evaluation/
+│   ├──datasets
+│   ├──experiments
+│   ├──reports
+│   └── eval_pipeline.py
 ├── streamlit_app.py      # Streamlit UI with Recall/ Precision depth controls
 ├── README.md             # Description of the project and AIOps steps followed
 └── requirements.txt      # Project dependencies
