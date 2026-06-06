@@ -66,8 +66,8 @@ This project incorporates the RAGAS framework to quantitatively evaluate the per
 
 The current evaluation suite includes:
 
-* **Faithfulness** – Verifies that generated answers are grounded in the retrieved context.
-* **Answer Relevancy** – Measures how effectively responses address the user's query.
+* **Faithfulness** – Verifies if generated answers are grounded in the retrieved context. This application evaluates to have a perfect score of 1.
+* **Answer Relevancy** – Measures how effectively responses address the user's query. This application's mean score is 0.85 while the minimum score was 0.81.
 
 Evaluation reports are generated automatically, enabling consistent benchmarking and comparison of retrieval strategies, prompt variations, and model configurations.
 
@@ -103,6 +103,7 @@ Evaluation reports are generated automatically, enabling consistent benchmarking
 │   ├──datasets
 │   ├──experiments
 │   ├──reports
+│   │    └── eval_report.csv
 │   └── eval_pipeline.py
 ├── streamlit_app.py      # Streamlit UI with Recall/ Precision depth controls
 ├── README.md             # Description of the project and AIOps steps followed
