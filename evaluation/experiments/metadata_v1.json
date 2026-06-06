@@ -1,0 +1,14 @@
+{
+    "run_id": "run_2026_06_06_001",
+    "timestamp": "2026-06-06T02:23:18.023957",
+    "data_version": "v1",
+    "llm_model": "gpt-4o-mini",
+    "embedding_model": "text-embedding-3-large",
+    "framework": "ragas",
+    "metrics": [
+        "Faithfulness",
+        "AnswerRelevency"
+    ],
+    "num_questions": 4,
+    "notes": "This is the final run with dataset_v1."
+}
